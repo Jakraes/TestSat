@@ -124,10 +124,10 @@ endif
 CPPFLAGS = -Wall -g -O2 $(CPUOPTIONS) -MMD $(OPTIONS) -I. -ffunction-sections -fdata-sections
 
 # compiler options for C++ only
-CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing
+CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing -Iinclude
 
 # compiler options for C only
-CFLAGS =
+CFLAGS = -Iinclude
 
 # linker options
 LDFLAGS = -Os -Wl,--gc-sections,--relax $(SPECS) $(CPUOPTIONS) -T$(MCU_LD)
@@ -144,10 +144,9 @@ LOADER = teensy_loader_cli
 
 # automatically create lists of the sources and objects
 # TODO: this does not handle Arduino libraries yet...
-C_FILES := $(wildcard *.c)
-CPP_FILES := $(wildcard *.cpp)
-OBJS := $(C_FILES:.c=.o) $(CPP_FILES:.cpp=.o)
-
+C_FILES := $(wildcard src/*.c)
+CPP_FILES := $(wildcard src/*.cpp)
+OBJS := $(notdir $(C_FILES:.c=.o)) $(notdir $(CPP_FILES:.cpp=.o))
 
 # Define the build directory
 BUILD_DIR = ./build
@@ -174,12 +173,12 @@ ifneq (,$(wildcard $(TOOLSPATH)))
 endif
 
 # Rule to compile .c files into .o files in the build directory
-$(BUILD_DIR)/%.o: %.c
+$(BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 # Rule to compile .cpp files into .o files in the build directory
-$(BUILD_DIR)/%.o: %.cpp
+$(BUILD_DIR)/%.o: src/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
