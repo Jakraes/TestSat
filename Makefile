@@ -124,10 +124,10 @@ endif
 CPPFLAGS = -Wall -g -O2 $(CPUOPTIONS) -MMD $(OPTIONS) -I. -ffunction-sections -fdata-sections
 
 # compiler options for C++ only
-CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing -Iinclude
+CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing -Iinclude -Iinclude/freertos
 
 # compiler options for C only
-CFLAGS = -Iinclude
+CFLAGS = -Iinclude -Iinclude/freertos
 
 # linker options
 LDFLAGS = -Os -Wl,--gc-sections,--relax $(SPECS) $(CPUOPTIONS) -T$(MCU_LD)
