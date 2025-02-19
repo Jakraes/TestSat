@@ -1,2 +1,2 @@
-./build/*
-./build/.*
+./build/*.o
+./build/*.d
