@@ -2,3 +2,4 @@
 /build/*.d
 /build/firmware/*.elf
 /build/firmware/*.hex
+.vscode
