@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -42,11 +42,25 @@ typedef void (* TaskFunction_t)( void * arg );
     #define pdMS_TO_TICKS( xTimeInMs )    ( ( TickType_t ) ( ( ( uint64_t ) ( xTimeInMs ) * ( uint64_t ) configTICK_RATE_HZ ) / ( uint64_t ) 1000U ) )
 #endif
 
+/* Converts a time in microseconds to a time in ticks.  This macro can be
+ * overridden by a macro of the same name defined in FreeRTOSConfig.h in case the
+ * definition here is not suitable for your application. */
+#ifndef pdUS_TO_TICKS
+    #define pdUS_TO_TICKS( xTimeInUs )    ( ( TickType_t ) ( ( ( uint64_t ) ( xTimeInUs ) * ( uint64_t ) configTICK_RATE_HZ ) / ( TickType_t ) 1000000ULL ) )
+#endif
+
 /* Converts a time in ticks to a time in milliseconds.  This macro can be
  * overridden by a macro of the same name defined in FreeRTOSConfig.h in case the
  * definition here is not suitable for your application. */
 #ifndef pdTICKS_TO_MS
     #define pdTICKS_TO_MS( xTimeInTicks )    ( ( TickType_t ) ( ( ( uint64_t ) ( xTimeInTicks ) * ( uint64_t ) 1000U ) / ( uint64_t ) configTICK_RATE_HZ ) )
+#endif
+
+/* Converts a time in ticks to a time in microseconds.  This macro can be
+ * overridden by a macro of the same name defined in FreeRTOSConfig.h in case the
+ * definition here is not suitable for your application. */
+#ifndef pdTICKS_TO_US
+    #define pdTICKS_TO_US( xTicks )       ( ( ( TickType_t ) ( xTicks ) * 1000000ULL ) / configTICK_RATE_HZ )
 #endif
 
 #define pdFALSE                                  ( ( BaseType_t ) 0 )

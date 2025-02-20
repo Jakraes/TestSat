@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -254,12 +254,12 @@
                 {
                     StaticTask_t * pxTimerTaskTCBBuffer = NULL;
                     StackType_t * pxTimerTaskStackBuffer = NULL;
-                    configSTACK_DEPTH_TYPE uxTimerTaskStackSize;
+                    uint32_t ulTimerTaskStackSize;
 
-                    vApplicationGetTimerTaskMemory( &pxTimerTaskTCBBuffer, &pxTimerTaskStackBuffer, &uxTimerTaskStackSize );
+                    vApplicationGetTimerTaskMemory( &pxTimerTaskTCBBuffer, &pxTimerTaskStackBuffer, &ulTimerTaskStackSize );
                     xTimerTaskHandle = xTaskCreateStaticAffinitySet( prvTimerTask,
                                                                      configTIMER_SERVICE_TASK_NAME,
-                                                                     uxTimerTaskStackSize,
+                                                                     ulTimerTaskStackSize,
                                                                      NULL,
                                                                      ( ( UBaseType_t ) configTIMER_TASK_PRIORITY ) | portPRIVILEGE_BIT,
                                                                      pxTimerTaskStackBuffer,
@@ -289,12 +289,12 @@
                 {
                     StaticTask_t * pxTimerTaskTCBBuffer = NULL;
                     StackType_t * pxTimerTaskStackBuffer = NULL;
-                    configSTACK_DEPTH_TYPE uxTimerTaskStackSize;
+                    uint32_t ulTimerTaskStackSize;
 
-                    vApplicationGetTimerTaskMemory( &pxTimerTaskTCBBuffer, &pxTimerTaskStackBuffer, &uxTimerTaskStackSize );
+                    vApplicationGetTimerTaskMemory( &pxTimerTaskTCBBuffer, &pxTimerTaskStackBuffer, &ulTimerTaskStackSize );
                     xTimerTaskHandle = xTaskCreateStatic( prvTimerTask,
                                                           configTIMER_SERVICE_TASK_NAME,
-                                                          uxTimerTaskStackSize,
+                                                          ulTimerTaskStackSize,
                                                           NULL,
                                                           ( ( UBaseType_t ) configTIMER_TASK_PRIORITY ) | portPRIVILEGE_BIT,
                                                           pxTimerTaskStackBuffer,
@@ -601,7 +601,7 @@
         traceENTER_xTimerGetReloadMode( xTimer );
 
         configASSERT( xTimer );
-        portBASE_TYPE_ENTER_CRITICAL();
+        taskENTER_CRITICAL();
         {
             if( ( pxTimer->ucStatus & tmrSTATUS_IS_AUTORELOAD ) == 0U )
             {
@@ -614,7 +614,7 @@
                 xReturn = pdTRUE;
             }
         }
-        portBASE_TYPE_EXIT_CRITICAL();
+        taskEXIT_CRITICAL();
 
         traceRETURN_xTimerGetReloadMode( xReturn );
 
@@ -1169,7 +1169,7 @@
         configASSERT( xTimer );
 
         /* Is the timer in the list of active timers? */
-        portBASE_TYPE_ENTER_CRITICAL();
+        taskENTER_CRITICAL();
         {
             if( ( pxTimer->ucStatus & tmrSTATUS_IS_ACTIVE ) == 0U )
             {
@@ -1180,7 +1180,7 @@
                 xReturn = pdTRUE;
             }
         }
-        portBASE_TYPE_EXIT_CRITICAL();
+        taskEXIT_CRITICAL();
 
         traceRETURN_xTimerIsTimerActive( xReturn );
 
@@ -1320,18 +1320,6 @@
         }
 
     #endif /* configUSE_TRACE_FACILITY */
-/*-----------------------------------------------------------*/
-
-/*
- * Reset the state in this file. This state is normally initialized at start up.
- * This function must be called by the application before restarting the
- * scheduler.
- */
-    void vTimerResetState( void )
-    {
-        xTimerQueue = NULL;
-        xTimerTaskHandle = NULL;
-    }
 /*-----------------------------------------------------------*/
 
 /* This entire source file will be skipped if the application is not configured

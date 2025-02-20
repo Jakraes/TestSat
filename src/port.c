@@ -1,6 +1,8 @@
+// clang-format off
+
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -27,14 +29,14 @@
  */
 
 /*-----------------------------------------------------------
-* Implementation of functions defined in portable.h for the ARM CM7 port.
+* Implementation of functions defined in portable.h for the ARM CM4F port.
 *----------------------------------------------------------*/
 
 /* Scheduler includes. */
 #include "FreeRTOS.h"
 #include "task.h"
 
-#ifndef __ARM_FP
+#ifndef __VFP_FP__
     #error This port can only be used when the project options are configured to enable hardware floating point support.
 #endif
 
@@ -55,6 +57,12 @@ typedef void ( * portISR_t )( void );
 #define portNVIC_PENDSVCLEAR_BIT              ( 1UL << 27UL )
 #define portNVIC_PEND_SYSTICK_SET_BIT         ( 1UL << 26UL )
 #define portNVIC_PEND_SYSTICK_CLEAR_BIT       ( 1UL << 25UL )
+
+/* Constants used to detect a Cortex-M7 r0p1 core, which should use the ARM_CM7
+ * r0p1 port. */
+#define portCPUID                             ( *( ( volatile uint32_t * ) 0xE000ed00 ) )
+#define portCORTEX_M7_r0p1_ID                 ( 0x410FC271UL )
+#define portCORTEX_M7_r0p0_ID                 ( 0x410FC270UL )
 
 #define portMIN_INTERRUPT_PRIORITY            ( 255UL )
 #define portNVIC_PENDSV_PRI                   ( ( ( uint32_t ) portMIN_INTERRUPT_PRIORITY ) << 16UL )
@@ -124,29 +132,29 @@ typedef void ( * portISR_t )( void );
  * file is weak to allow application writers to change the timer used to
  * generate the tick interrupt.
  */
-void vPortSetupTimerInterrupt( void );
+void vPortSetupTimerInterrupt( void ) __attribute__( ( weak, section( ".flashmem" ) ) );
 
 /*
  * Exception handlers.
  */
-void xPortPendSVHandler( void ) __attribute__( ( naked ) );
-void xPortSysTickHandler( void );
-void vPortSVCHandler( void ) __attribute__( ( naked ) );
+void xPortPendSVHandler( void ) portDONT_DISCARD __attribute__( ( naked ) );
+void xPortSysTickHandler( void ) portDONT_DISCARD;
+void vPortSVCHandler( void ) portDONT_DISCARD __attribute__( ( naked ) );
 
 /*
  * Start first task is a separate function so it can be tested in isolation.
  */
-static void prvPortStartFirstTask( void ) __attribute__( ( naked ) );
+static void prvPortStartFirstTask( void ) portDONT_DISCARD __attribute__( ( naked, section( ".flashmem" ) ) );
 
 /*
  * Function to enable the VFP.
  */
-static void vPortEnableVFP( void ) __attribute__( ( naked ) );
+static void vPortEnableVFP( void ) portDONT_DISCARD __attribute__( ( naked, section( ".flashmem" ) ) );
 
 /*
  * Used to catch tasks that attempt to return from their implementing function.
  */
-static void prvTaskExitError( void );
+void prvTaskExitError( void ) __attribute__ (( section( ".flashmem" ) ));
 
 /*-----------------------------------------------------------*/
 
@@ -225,7 +233,7 @@ StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
 }
 /*-----------------------------------------------------------*/
 
-static void prvTaskExitError( void )
+void prvTaskExitError( void )
 {
     volatile uint32_t ulDummy = 0;
 
@@ -254,8 +262,8 @@ static void prvTaskExitError( void )
 void vPortSVCHandler( void )
 {
     __asm volatile (
-        "   ldr r3, =pxCurrentTCB           \n" /* Restore the context. */
-        "   ldr r1, [r3]                    \n" /* Get the pxCurrentTCB address. */
+        "   ldr r3, pxCurrentTCBConst2      \n" /* Restore the context. */
+        "   ldr r1, [r3]                    \n" /* Use pxCurrentTCBConst to get the pxCurrentTCB address. */
         "   ldr r0, [r1]                    \n" /* The first item in pxCurrentTCB is the task top of stack. */
         "   ldmia r0!, {r4-r11, r14}        \n" /* Pop the registers that are not automatically saved on exception entry and the critical nesting count. */
         "   msr psp, r0                     \n" /* Restore the task stack pointer. */
@@ -264,7 +272,8 @@ void vPortSVCHandler( void )
         "   msr basepri, r0                 \n"
         "   bx r14                          \n"
         "                                   \n"
-        "   .ltorg                          \n"
+        "   .align 4                        \n"
+        "pxCurrentTCBConst2: .word pxCurrentTCB             \n"
         );
 }
 /*-----------------------------------------------------------*/
@@ -280,6 +289,7 @@ static void prvPortStartFirstTask( void )
         " ldr r0, [r0]          \n"
         " ldr r0, [r0]          \n"
         " msr msp, r0           \n" /* Set the msp back to the start of the stack. */
+        " isb                   \n"
         " mov r0, #0            \n" /* Clear the bit that indicates the FPU is in use, see comment above. */
         " msr control, r0       \n"
         " cpsie i               \n" /* Globally enable interrupts. */
@@ -298,39 +308,11 @@ static void prvPortStartFirstTask( void )
  */
 BaseType_t xPortStartScheduler( void )
 {
-    /* An application can install FreeRTOS interrupt handlers in one of the
-     * following ways:
-     * 1. Direct Routing - Install the functions vPortSVCHandler and
-     *    xPortPendSVHandler for SVCall and PendSV interrupts respectively.
-     * 2. Indirect Routing - Install separate handlers for SVCall and PendSV
-     *    interrupts and route program control from those handlers to
-     *    vPortSVCHandler and xPortPendSVHandler functions.
-     *
-     * Applications that use Indirect Routing must set
-     * configCHECK_HANDLER_INSTALLATION to 0 in their FreeRTOSConfig.h. Direct
-     * routing, which is validated here when configCHECK_HANDLER_INSTALLATION
-     * is 1, should be preferred when possible. */
-    #if ( configCHECK_HANDLER_INSTALLATION == 1 )
-    {
-        const portISR_t * const pxVectorTable = portSCB_VTOR_REG;
-
-        /* Validate that the application has correctly installed the FreeRTOS
-         * handlers for SVCall and PendSV interrupts. We do not check the
-         * installation of the SysTick handler because the application may
-         * choose to drive the RTOS tick using a timer other than the SysTick
-         * timer by overriding the weak function vPortSetupTimerInterrupt().
-         *
-         * Assertion failures here indicate incorrect installation of the
-         * FreeRTOS handlers. For help installing the FreeRTOS handlers, see
-         * https://www.freertos.org/Why-FreeRTOS/FAQs.
-         *
-         * Systems with a configurable address for the interrupt vector table
-         * can also encounter assertion failures or even system faults here if
-         * VTOR is not set correctly to point to the application's vector table. */
-        configASSERT( pxVectorTable[ portVECTOR_INDEX_SVC ] == vPortSVCHandler );
-        configASSERT( pxVectorTable[ portVECTOR_INDEX_PENDSV ] == xPortPendSVHandler );
-    }
-    #endif /* configCHECK_HANDLER_INSTALLATION */
+    /* This port can be used on all revisions of the Cortex-M7 core other than
+     * the r0p1 parts.  r0p1 parts should use the port from the
+     * /source/portable/GCC/ARM_CM7/r0p1 directory. */
+    configASSERT( portCPUID != portCORTEX_M7_r0p1_ID );
+    configASSERT( portCPUID != portCORTEX_M7_r0p0_ID );
 
     #if ( configASSERT_DEFINED == 1 )
     {
@@ -426,6 +408,40 @@ BaseType_t xPortStartScheduler( void )
      * here already. */
     vPortSetupTimerInterrupt();
 
+    /* An application can install FreeRTOS interrupt handlers in one of the
+     * folllowing ways:
+     * 1. Direct Routing - Install the functions vPortSVCHandler and
+     *    xPortPendSVHandler for SVCall and PendSV interrupts respectively.
+     * 2. Indirect Routing - Install separate handlers for SVCall and PendSV
+     *    interrupts and route program control from those handlers to
+     *    vPortSVCHandler and xPortPendSVHandler functions.
+     *
+     * Applications that use Indirect Routing must set
+     * configCHECK_HANDLER_INSTALLATION to 0 in their FreeRTOSConfig.h. Direct
+     * routing, which is validated here when configCHECK_HANDLER_INSTALLATION
+     * is 1, should be preferred when possible. */
+    #if ( configCHECK_HANDLER_INSTALLATION == 1 )
+    {
+        const portISR_t * const pxVectorTable = portSCB_VTOR_REG;
+
+        /* Validate that the application has correctly installed the FreeRTOS
+         * handlers for SVCall and PendSV interrupts. We do not check the
+         * installation of the SysTick handler because the application may
+         * choose to drive the RTOS tick using a timer other than the SysTick
+         * timer by overriding the weak function vPortSetupTimerInterrupt().
+         *
+         * Assertion failures here indicate incorrect installation of the
+         * FreeRTOS handlers. For help installing the FreeRTOS handlers, see
+         * https://www.FreeRTOS.org/FAQHelp.html.
+         *
+         * Systems with a configurable address for the interrupt vector table
+         * can also encounter assertion failures or even system faults here if
+         * VTOR is not set correctly to point to the application's vector table. */
+        configASSERT( pxVectorTable[ portVECTOR_INDEX_SVC ] == vPortSVCHandler );
+        configASSERT( pxVectorTable[ portVECTOR_INDEX_PENDSV ] == xPortPendSVHandler );
+    }
+    #endif /* configCHECK_HANDLER_INSTALLATION */
+
     /* Initialise the critical nesting count ready for the first task. */
     uxCriticalNesting = 0;
 
@@ -454,6 +470,19 @@ BaseType_t xPortStartScheduler( void )
 
 void vPortEndScheduler( void )
 {
+    /* Cancel the Idle task and free its resources */
+    vTaskDelete( xTaskGetIdleTaskHandle() );
+    #if ( configUSE_TIMERS == 1 )
+        extern TaskHandle_t xTimerGetTimerDaemonTaskHandle( void );
+        /* Cancel the Timer task and free its resources */
+        vTaskDelete( xTimerGetTimerDaemonTaskHandle() );
+    #endif /* configUSE_TIMERS */
+
+    /* Stop and clear the SysTick. */
+    portNVIC_SYSTICK_CTRL_REG = 0UL;
+    portNVIC_SYSTICK_CURRENT_VALUE_REG = 0UL;
+    portENABLE_INTERRUPTS();
+    
     /* Not implemented in ports where there is nothing to return to.
      * Artificially force an assert. */
     configASSERT( uxCriticalNesting == 1000UL );
@@ -498,7 +527,7 @@ void xPortPendSVHandler( void )
         "   mrs r0, psp                         \n"
         "   isb                                 \n"
         "                                       \n"
-        "   ldr r3, =pxCurrentTCB               \n" /* Get the location of the current TCB. */
+        "   ldr r3, pxCurrentTCBConst           \n" /* Get the location of the current TCB. */
         "   ldr r2, [r3]                        \n"
         "                                       \n"
         "   tst r14, #0x10                      \n" /* Is the task using the FPU context?  If so, push high vfp registers. */
@@ -510,11 +539,9 @@ void xPortPendSVHandler( void )
         "                                       \n"
         "   stmdb sp!, {r0, r3}                 \n"
         "   mov r0, %0                          \n"
-        "   cpsid i                             \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
         "   msr basepri, r0                     \n"
         "   dsb                                 \n"
         "   isb                                 \n"
-        "   cpsie i                             \n" /* ARM Cortex-M7 r0p1 Errata 837070 workaround. */
         "   bl vTaskSwitchContext               \n"
         "   mov r0, #0                          \n"
         "   msr basepri, r0                     \n"
@@ -541,7 +568,8 @@ void xPortPendSVHandler( void )
         "                                       \n"
         "   bx r14                              \n"
         "                                       \n"
-        "   .ltorg                              \n"
+        "   .align 4                            \n"
+        "pxCurrentTCBConst: .word pxCurrentTCB  \n"
         ::"i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY )
     );
 }
@@ -799,7 +827,7 @@ void xPortSysTickHandler( void )
  * Setup the systick timer to generate the tick interrupts at the required
  * frequency.
  */
-__attribute__( ( weak ) ) void vPortSetupTimerInterrupt( void )
+__attribute__( ( weak, section( ".flashmem" ) ) ) void vPortSetupTimerInterrupt( void )
 {
     /* Calculate the constants required to configure the tick interrupt. */
     #if ( configUSE_TICKLESS_IDLE == 1 )
@@ -874,7 +902,7 @@ static void vPortEnableVFP( void )
              *
              * The following links provide detailed information:
              * https://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html
-             * https://www.freertos.org/Why-FreeRTOS/FAQs */
+             * https://www.FreeRTOS.org/FAQHelp.html */
             configASSERT( ucCurrentPriority >= ucMaxSysCallPriority );
         }
 

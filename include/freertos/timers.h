@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -737,18 +737,14 @@ TaskHandle_t xTimerGetTimerDaemonTaskHandle( void ) PRIVILEGED_FUNCTION;
  * // The key press event handler.
  * void vKeyPressEventHandler( char cKey )
  * {
- *     // Reset the timer that is responsible for turning the back-light off after
- *     // 5 seconds of key inactivity. Wait 10 ticks for the command to be
- *     // successfully sent if it cannot be sent immediately.
- *     if( xTimerReset( xBacklightTimer, 10 ) == pdPASS )
+ *     // Ensure the LCD back-light is on, then reset the timer that is
+ *     // responsible for turning the back-light off after 5 seconds of
+ *     // key inactivity.  Wait 10 ticks for the command to be successfully sent
+ *     // if it cannot be sent immediately.
+ *     vSetBacklightState( BACKLIGHT_ON );
+ *     if( xTimerReset( xBacklightTimer, 100 ) != pdPASS )
  *     {
- *        // Turn on the LCD back-light. It will be turned off in the
- *        // vBacklightTimerCallback after 5 seconds of key inactivity.
- *        vSetBacklightState( BACKLIGHT_ON );
- *      }
- *     else
- *     {
- *         // The reset command was not executed successfully. Take appropriate
+ *         // The reset command was not executed successfully.  Take appropriate
  *         // action here.
  *     }
  *
@@ -757,15 +753,16 @@ TaskHandle_t xTimerGetTimerDaemonTaskHandle( void ) PRIVILEGED_FUNCTION;
  *
  * void main( void )
  * {
+ * int32_t x;
  *
  *     // Create then start the one-shot timer that is responsible for turning
  *     // the back-light off if no keys are pressed within a 5 second period.
  *     xBacklightTimer = xTimerCreate( "BacklightTimer",           // Just a text name, not used by the kernel.
- *                                     pdMS_TO_TICKS( 5000 ),      // The timer period in ticks.
+ *                                     ( 5000 / portTICK_PERIOD_MS), // The timer period in ticks.
  *                                     pdFALSE,                    // The timer is a one-shot timer.
  *                                     0,                          // The id is not used by the callback so can take any value.
  *                                     vBacklightTimerCallback     // The callback function that switches the LCD back-light off.
- *                                    );
+ *                                   );
  *
  *     if( xBacklightTimer == NULL )
  *     {
@@ -1387,7 +1384,7 @@ BaseType_t xTimerGenericCommandFromISR( TimerHandle_t xTimer,
 /**
  * task.h
  * @code{c}
- * void vApplicationGetTimerTaskMemory( StaticTask_t ** ppxTimerTaskTCBBuffer, StackType_t ** ppxTimerTaskStackBuffer, configSTACK_DEPTH_TYPE * puxTimerTaskStackSize )
+ * void vApplicationGetTimerTaskMemory( StaticTask_t ** ppxTimerTaskTCBBuffer, StackType_t ** ppxTimerTaskStackBuffer, uint32_t *pulTimerTaskStackSize )
  * @endcode
  *
  * This function is used to provide a statically allocated block of memory to FreeRTOS to hold the Timer Task TCB.  This function is required when
@@ -1395,11 +1392,11 @@ BaseType_t xTimerGenericCommandFromISR( TimerHandle_t xTimer,
  *
  * @param ppxTimerTaskTCBBuffer   A handle to a statically allocated TCB buffer
  * @param ppxTimerTaskStackBuffer A handle to a statically allocated Stack buffer for the idle task
- * @param puxTimerTaskStackSize   A pointer to the number of elements that will fit in the allocated stack buffer
+ * @param pulTimerTaskStackSize   A pointer to the number of elements that will fit in the allocated stack buffer
  */
     void vApplicationGetTimerTaskMemory( StaticTask_t ** ppxTimerTaskTCBBuffer,
                                          StackType_t ** ppxTimerTaskStackBuffer,
-                                         configSTACK_DEPTH_TYPE * puxTimerTaskStackSize );
+                                         uint32_t * pulTimerTaskStackSize );
 
 #endif
 
@@ -1419,12 +1416,6 @@ BaseType_t xTimerGenericCommandFromISR( TimerHandle_t xTimer,
     void vApplicationDaemonTaskStartupHook( void );
 
 #endif
-
-/*
- * This function resets the internal state of the timer module. It must be called
- * by the application before restarting the scheduler.
- */
-void vTimerResetState( void ) PRIVILEGED_FUNCTION;
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

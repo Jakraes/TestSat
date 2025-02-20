@@ -1,6 +1,6 @@
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -85,34 +85,18 @@
     #define portARCH_NAME    NULL
 #endif
 
-#ifndef portBASE_TYPE_ENTER_CRITICAL
-    #define portBASE_TYPE_ENTER_CRITICAL()    taskENTER_CRITICAL()
-#endif
-
-#ifndef portBASE_TYPE_EXIT_CRITICAL
-    #define portBASE_TYPE_EXIT_CRITICAL()    taskEXIT_CRITICAL()
-#endif
-
-#ifndef portGET_CURRENT_TOP_OF_STACK
-    #define portGET_CURRENT_TOP_OF_STACK( pxCurrentTopOfStack )    { pxCurrentTopOfStack = ( StackType_t * ) pxCurrentTCB->pxTopOfStack; }
-#endif
-
-#ifndef configSTACK_DEPTH_TYPE
-    #define configSTACK_DEPTH_TYPE    StackType_t
-#endif
-
 #ifndef configSTACK_ALLOCATION_FROM_SEPARATE_HEAP
     /* Defaults to 0 for backward compatibility. */
     #define configSTACK_ALLOCATION_FROM_SEPARATE_HEAP    0
 #endif
-
-#include "mpu_wrappers.h"
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus
     extern "C" {
 #endif
 /* *INDENT-ON* */
+
+#include "mpu_wrappers.h"
 
 /*
  * Setup the stack of a new task so it is ready to be placed under the
@@ -127,24 +111,28 @@
                                              TaskFunction_t pxCode,
                                              void * pvParameters,
                                              BaseType_t xRunPrivileged,
-                                             xMPU_SETTINGS * xMPUSettings ) PRIVILEGED_FUNCTION;
+                                             xMPU_SETTINGS * xMPUSettings ) PRIVILEGED_FUNCTION
+                                             __attribute__ (( section( ".flashmem" ) ));
     #else
         StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                              TaskFunction_t pxCode,
                                              void * pvParameters,
                                              BaseType_t xRunPrivileged,
-                                             xMPU_SETTINGS * xMPUSettings ) PRIVILEGED_FUNCTION;
+                                             xMPU_SETTINGS * xMPUSettings ) PRIVILEGED_FUNCTION
+                                             __attribute__ (( section( ".flashmem" ) ));
     #endif /* if ( portHAS_STACK_OVERFLOW_CHECKING == 1 ) */
 #else /* if ( portUSING_MPU_WRAPPERS == 1 ) */
     #if ( portHAS_STACK_OVERFLOW_CHECKING == 1 )
         StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                              StackType_t * pxEndOfStack,
                                              TaskFunction_t pxCode,
-                                             void * pvParameters ) PRIVILEGED_FUNCTION;
+                                             void * pvParameters ) PRIVILEGED_FUNCTION
+                                             __attribute__ (( section( ".flashmem" ) ));
     #else
         StackType_t * pxPortInitialiseStack( StackType_t * pxTopOfStack,
                                              TaskFunction_t pxCode,
-                                             void * pvParameters ) PRIVILEGED_FUNCTION;
+                                             void * pvParameters ) PRIVILEGED_FUNCTION
+                                             __attribute__ (( section( ".flashmem" ) ));
     #endif
 #endif /* if ( portUSING_MPU_WRAPPERS == 1 ) */
 
@@ -190,14 +178,13 @@ void vPortGetHeapStats( HeapStats_t * pxHeapStats );
 /*
  * Map to the memory management routines required for the port.
  */
-void * pvPortMalloc( size_t xWantedSize ) PRIVILEGED_FUNCTION;
+void * pvPortMalloc( size_t xSize ) PRIVILEGED_FUNCTION;
 void * pvPortCalloc( size_t xNum,
                      size_t xSize ) PRIVILEGED_FUNCTION;
 void vPortFree( void * pv ) PRIVILEGED_FUNCTION;
 void vPortInitialiseBlocks( void ) PRIVILEGED_FUNCTION;
 size_t xPortGetFreeHeapSize( void ) PRIVILEGED_FUNCTION;
 size_t xPortGetMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
-void xPortResetHeapMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
 
 #if ( configSTACK_ALLOCATION_FROM_SEPARATE_HEAP == 1 )
     void * pvPortMallocStack( size_t xSize ) PRIVILEGED_FUNCTION;
@@ -206,12 +193,6 @@ void xPortResetHeapMinimumEverFreeHeapSize( void ) PRIVILEGED_FUNCTION;
     #define pvPortMallocStack    pvPortMalloc
     #define vPortFreeStack       vPortFree
 #endif
-
-/*
- * This function resets the internal state of the heap module. It must be called
- * by the application before restarting the scheduler.
- */
-void vPortHeapResetState( void ) PRIVILEGED_FUNCTION;
 
 #if ( configUSE_MALLOC_FAILED_HOOK == 1 )
 
@@ -223,21 +204,21 @@ void vPortHeapResetState( void ) PRIVILEGED_FUNCTION;
  *
  * This hook function is called when allocation failed.
  */
-    void vApplicationMallocFailedHook( void );
+    void vApplicationMallocFailedHook( void ) __attribute__ (( section( ".flashmem" ), noinline ));
 #endif
 
 /*
  * Setup the hardware ready for the scheduler to take control.  This generally
  * sets up a tick interrupt and sets timers for the correct tick frequency.
  */
-BaseType_t xPortStartScheduler( void ) PRIVILEGED_FUNCTION;
+BaseType_t xPortStartScheduler( void ) PRIVILEGED_FUNCTION __attribute__ (( section( ".flashmem" ), noinline ));
 
 /*
  * Undo any hardware/ISR setup that was performed by xPortStartScheduler() so
  * the hardware is left in its original condition after the scheduler stops
  * executing.
  */
-void vPortEndScheduler( void ) PRIVILEGED_FUNCTION;
+void vPortEndScheduler( void ) PRIVILEGED_FUNCTION __attribute__ (( section( ".flashmem" ), noinline ));
 
 /*
  * The structures and methods of manipulating the MPU are contained within the
@@ -251,7 +232,7 @@ void vPortEndScheduler( void ) PRIVILEGED_FUNCTION;
     void vPortStoreTaskMPUSettings( xMPU_SETTINGS * xMPUSettings,
                                     const struct xMEMORY_REGION * const xRegions,
                                     StackType_t * pxBottomOfStack,
-                                    configSTACK_DEPTH_TYPE uxStackDepth ) PRIVILEGED_FUNCTION;
+                                    uint32_t ulStackDepth ) PRIVILEGED_FUNCTION;
 #endif
 
 /**

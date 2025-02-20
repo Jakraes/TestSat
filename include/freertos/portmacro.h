@@ -1,6 +1,8 @@
+// clang-format off
+
 /*
- * FreeRTOS Kernel <DEVELOPMENT BRANCH>
- * Copyright (C) 2021 Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * FreeRTOS Kernel V11.0.1
+ * Copyright (C) 2021 Amazon.com, Inc. or its affiliates.  All Rights Reserved.
  *
  * SPDX-License-Identifier: MIT
  *
@@ -29,6 +31,8 @@
 
 #ifndef PORTMACRO_H
 #define PORTMACRO_H
+
+#include "mpu_wrappers.h"
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus
@@ -69,9 +73,12 @@ typedef unsigned long    UBaseType_t;
 /* 32-bit tick type on a 32-bit architecture, so reads of the tick count do
  * not need to be guarded with a critical section. */
     #define portTICK_TYPE_IS_ATOMIC    1
-#else
+#elif ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_64_BITS )
+    typedef uint64_t TickType_t;
+    #define portMAX_DELAY              ( TickType_t ) 0xffffffffffffffffULL
+#else /* if ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_16_BITS ) */
     #error configTICK_TYPE_WIDTH_IN_BITS set to unsupported tick type width.
-#endif
+#endif /* if ( configTICK_TYPE_WIDTH_IN_BITS == TICK_TYPE_WIDTH_16_BITS ) */
 /*-----------------------------------------------------------*/
 
 /* Architecture specifics. */
@@ -171,7 +178,7 @@ extern void vPortExitCritical( void );
 
 /*-----------------------------------------------------------*/
 
-#if ( configASSERT_DEFINED == 1 )
+#ifdef configASSERT
     void vPortValidateInterruptPriority( void );
     #define portASSERT_IF_INTERRUPT_PRIORITY_INVALID()    vPortValidateInterruptPriority()
 #endif
@@ -183,6 +190,10 @@ extern void vPortExitCritical( void );
 
 #ifndef portFORCE_INLINE
     #define portFORCE_INLINE    inline __attribute__( ( always_inline ) )
+#endif
+
+#ifndef portDONT_DISCARD
+    #define portDONT_DISCARD    __attribute__( ( used ) )
 #endif
 
 portFORCE_INLINE static BaseType_t xPortIsInsideInterrupt( void )
@@ -214,11 +225,9 @@ portFORCE_INLINE static void vPortRaiseBASEPRI( void )
     __asm volatile
     (
         "   mov %0, %1                                              \n" \
-        "   cpsid i                                                 \n" \
         "   msr basepri, %0                                         \n" \
         "   isb                                                     \n" \
         "   dsb                                                     \n" \
-        "   cpsie i                                                 \n" \
         : "=r" ( ulNewBASEPRI ) : "i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
     );
 }
@@ -233,11 +242,9 @@ portFORCE_INLINE static uint32_t ulPortRaiseBASEPRI( void )
     (
         "   mrs %0, basepri                                         \n" \
         "   mov %1, %2                                              \n" \
-        "   cpsid i                                                 \n" \
         "   msr basepri, %1                                         \n" \
         "   isb                                                     \n" \
         "   dsb                                                     \n" \
-        "   cpsie i                                                 \n" \
         : "=r" ( ulOriginalBASEPRI ), "=r" ( ulNewBASEPRI ) : "i" ( configMAX_SYSCALL_INTERRUPT_PRIORITY ) : "memory"
     );
 
@@ -256,7 +263,40 @@ portFORCE_INLINE static void vPortSetBASEPRI( uint32_t ulNewMaskValue )
 }
 /*-----------------------------------------------------------*/
 
-#define portMEMORY_BARRIER()    __asm volatile ( "" ::: "memory" )
+#define portMEMORY_BARRIER()     __asm volatile ( "" ::: "memory" )
+#define portDATA_SYNC_BARRIER()  __asm volatile ( "dsb" ::: "memory" )
+#define portINSTR_SYNC_BARRIER() __asm volatile ( "isb" )
+
+/*
+ * Map to the memory management routines required for the port.
+ */
+void* malloc( size_t ) __attribute__( ( __malloc__, __warn_unused_result__, __alloc_size__( 1 ) ) );
+portFORCE_INLINE static void* pvPortMalloc( size_t xSize ) PRIVILEGED_FUNCTION __attribute__( ( __malloc__, __warn_unused_result__, __alloc_size__( 1 ) ) );
+portFORCE_INLINE static void* pvPortMalloc( size_t xSize ) PRIVILEGED_FUNCTION {
+    return malloc( xSize );
+}
+
+void* calloc( size_t, size_t ) __attribute__( ( __malloc__, __warn_unused_result__, __alloc_size__( 1, 2 ) ) );
+portFORCE_INLINE static void* pvPortCalloc( size_t xNum, size_t xSize ) PRIVILEGED_FUNCTION __attribute__( ( __malloc__, __warn_unused_result__, __alloc_size__( 1, 2 ) ) );
+portFORCE_INLINE static void* pvPortCalloc( size_t xNum, size_t xSize ) PRIVILEGED_FUNCTION {
+    return calloc( xNum, xSize );
+}
+
+void free( void* );
+portFORCE_INLINE static void vPortFree( void* pv ) PRIVILEGED_FUNCTION {
+    free( pv );
+}
+
+portFORCE_INLINE static uint32_t __get_PRIMASK( void ) {
+    uint32_t result;
+
+    __asm volatile( "MRS %0, primask" : "=r" ( result ) );
+    return result;
+}
+
+portFORCE_INLINE static void __set_PRIMASK( uint32_t pri_mask ) {
+    __asm volatile( "MSR primask, %0" : : "r" ( pri_mask ) : "memory" );
+}
 
 /* *INDENT-OFF* */
 #ifdef __cplusplus

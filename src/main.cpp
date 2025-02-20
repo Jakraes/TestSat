@@ -4,6 +4,10 @@ extern "C" {
   #include "FlashTxx.h"		// TLC/T3x/T4x/TMM flash primitives
 }
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/timers.h"
+
 const int led = LED_BUILTIN;	// LED pin
 Stream *serial = &Serial;	// Serial (USB) or Serial1, Serial2, etc. (UART)
 
@@ -20,6 +24,18 @@ void blink_long() {
   delay(600);
   digitalWrite( led, LOW );
   delay(200);
+}
+
+TaskHandle_t task1Handle = NULL;
+
+StaticTask_t taskBuffer;
+StackType_t taskStack[1024];
+
+void task1(void *pvParameters) {
+  while (1) {
+    vTaskDelay( 1000 / portTICK_PERIOD_MS );
+    blink_long();
+  }
 }
 
 void setup ()
@@ -42,6 +58,17 @@ void setup ()
   serial->printf( "target = %s (%dK flash in %dK sectors)\n",
 			FLASH_ID, FLASH_SIZE/1024, FLASH_SECTOR_SIZE/1024);
 
+  task1Handle = xTaskCreateStatic(
+    task1,
+    "task1",
+    1024,
+    NULL,
+    2,
+    taskStack,
+    &taskBuffer
+  );
+
+  vTaskStartScheduler();
 }
 
 
@@ -65,6 +92,7 @@ void loop ()
   serial->printf( "enter opcodes via serial" );
   while (true) {
     blink_short();
+    serial->printf("Waiting for user input\n");
     read_ascii_line( serial, line, sizeof(line) );
     sscanf( line, "%d", &user_input );
     if (user_input == 1) { // serial
