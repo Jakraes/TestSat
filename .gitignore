@@ -3,3 +3,4 @@
 /build/firmware/*.elf
 /build/firmware/*.hex
 .vscode
+.idea
