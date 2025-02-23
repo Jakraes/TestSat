@@ -27,15 +27,18 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-# Use these lines for Teensy 4.0
-#MCU = IMXRT1062
-#MCU_LD = imxrt1062.ld
-#MCU_DEF = ARDUINO_TEENSY40
+# Use this to build for Teensy 4.1 or Teensy 4.0
+TVERSION?=41
 
-# Use these lines for Teensy 4.1
-MCU = IMXRT1062
-MCU_LD = imxrt1062_t41.ld
-MCU_DEF = ARDUINO_TEENSY41
+ifeq ($(TVERSION),40)
+	MCU = IMXRT1062
+	MCU_LD = imxrt1062_mm.ld
+	MCU_DEF = ARDUINO_TEENSY40
+else
+	MCU = IMXRT1062
+	MCU_LD = imxrt1062_t41.ld
+	MCU_DEF = ARDUINO_TEENSY41
+endif
 
 # The name of your project (used to name the compiled .hex file)
 TARGET = v0.2
@@ -124,10 +127,10 @@ endif
 CPPFLAGS = -Wall -g -O2 $(CPUOPTIONS) -MMD $(OPTIONS) -I. -ffunction-sections -fdata-sections
 
 # compiler options for C++ only
-CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing -Iinclude -Iinclude/freertos
+CXXFLAGS = -std=gnu++17 -felide-constructors -fno-exceptions -fpermissive -fno-rtti -Wno-error=narrowing -Iinclude -Ilib -Ilib/freertos
 
 # compiler options for C only
-CFLAGS = -Iinclude -Iinclude/freertos
+CFLAGS = -Iinclude -Ilib -Ilib/freertos
 
 # linker options
 LDFLAGS = -Os -Wl,--gc-sections,--relax $(SPECS) $(CPUOPTIONS) -T$(MCU_LD)
@@ -144,8 +147,8 @@ LOADER = teensy_loader_cli
 
 # automatically create lists of the sources and objects
 # TODO: this does not handle Arduino libraries yet...
-C_FILES := $(wildcard src/*.c)
-CPP_FILES := $(wildcard src/*.cpp)
+C_FILES := $(wildcard src/*.c lib/*.c)
+CPP_FILES := $(wildcard src/*.cpp lib/*.cpp)
 OBJS := $(notdir $(C_FILES:.c=.o)) $(notdir $(CPP_FILES:.cpp=.o))
 
 # Define the build directory
@@ -172,13 +175,23 @@ ifneq (,$(wildcard $(TOOLSPATH)))
 	-$(TOOLSPATH)/teensy_reboot
 endif
 
-# Rule to compile .c files into .o files in the build directory
+# Rule to compile .c files from src/ into .o files in the build directory
 $(BUILD_DIR)/%.o: src/%.c
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
-# Rule to compile .cpp files into .o files in the build directory
+# Rule to compile .cpp files from src/ into .o files in the build directory
 $(BUILD_DIR)/%.o: src/%.cpp
+	@mkdir -p $(BUILD_DIR)
+	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+
+# Rule to compile .c files from lib/ into .o files in the build directory
+$(BUILD_DIR)/%.o: lib/%.c
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+
+# Rule to compile .cpp files from lib/ into .o files in the build directory
+$(BUILD_DIR)/%.o: lib/%.cpp
 	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
@@ -190,4 +203,4 @@ clean:
 
 flashonly:
 	@echo ">> Flashing existing hex..."
-	$(LOADER) --mcu=TEENSY41 -w -s -v $(FIRMWARE_DIR)/$(TARGET).hex
+	$(LOADER) --mcu=TEENSY$(TVERSION) -w -s -v $(FIRMWARE_DIR)/$(TARGET).hex
